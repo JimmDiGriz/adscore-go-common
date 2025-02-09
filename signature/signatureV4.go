@@ -276,7 +276,7 @@ func readStructureField(signature []byte, fieldType string) (interface{}, []byte
 
 		length := *vData["v"]
 
-		if length&0x8000 == 0 {
+		if length&0x8000 > 0 {
 			/* For future use */
 			length = length & 0xff
 		}
