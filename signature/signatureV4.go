@@ -36,7 +36,7 @@ var FIELD_IDS = map[uint8]*FieldTypeDef{
 	0x00: {"requestTime", "ulong"},
 	0x01: {"signatureTime", "ulong"},
 	0x10: {"ipv4", "ulong"}, // Debug field
-	0x40: {},                // Reserved for future use
+	0x40: {"pizdec", "ushort"},                // Reserved for future use
 	0x80: {"masterSignType", "uchar"},
 	0x81: {"customerSignType", "uchar"},
 	0xc0: {"masterToken", "string"},
