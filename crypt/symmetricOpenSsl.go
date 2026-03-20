@@ -83,8 +83,8 @@ func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
 }
 
 func gcmDecrypt(data []byte, encryptionKey []byte, iv []byte, tag []byte) ([]byte, error) {
-
-	cipherText := append(data, tag...)
+	// Клонируем data перед append, чтобы не мутировать входной слайс
+	cipherText := append(append([]byte{}, data...), tag...)
 
 	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {

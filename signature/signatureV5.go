@@ -49,33 +49,30 @@ func CreateSignatureV5FromRequest(signature string, ipAddresses []string, userAg
 }
 
 func (s *Signature5) Verify(ipAddresses []string, userAgent string) error {
+	// Fix #1: Проверяем, что Payload инициализирован
+	if s.Payload == nil {
+		return adscoreErrors.NewVerifyError("payload not initialized")
+	}
 
 	var matchingIp net.IP = nil
 
 	for _, ipAddress := range ipAddresses {
-
 		providedIpAddress := net.ParseIP(ipAddress)
 
-		if s.Payload["ipv4.ip"] == nil {
-			continue
+		// Проверяем ipv4.ip с type assertion
+		if ipV4Field, ok := s.Payload["ipv4.ip"].(string); ok {
+			if net.IP.Equal(providedIpAddress, net.ParseIP(ipV4Field)) {
+				matchingIp = providedIpAddress
+				break
+			}
 		}
 
-		ipV4FromSignature := s.Payload["ipv4.ip"].(string)
-
-		if net.IP.Equal(providedIpAddress, net.ParseIP(ipV4FromSignature)) {
-			matchingIp = providedIpAddress
-			break
-		}
-
-		if s.Payload["ipv6.ip"] == nil {
-			continue
-		}
-
-		ipV6FromSignature := s.Payload["ipv6.ip"].(string)
-
-		if net.IP.Equal(providedIpAddress, net.ParseIP(ipV6FromSignature)) {
-			matchingIp = providedIpAddress
-			break
+		// Проверяем ipv6.ip с type assertion
+		if ipV6Field, ok := s.Payload["ipv6.ip"].(string); ok {
+			if net.IP.Equal(providedIpAddress, net.ParseIP(ipV6Field)) {
+				matchingIp = providedIpAddress
+				break
+			}
 		}
 	}
 
@@ -83,7 +80,11 @@ func (s *Signature5) Verify(ipAddresses []string, userAgent string) error {
 		return adscoreErrors.NewVerifyError("signature IP mismatch")
 	}
 
-	signatureUserAgent := s.Payload["b.ua"].(string)
+	// Проверяем b.ua с type assertion
+	signatureUserAgent, ok := s.Payload["b.ua"].(string)
+	if !ok {
+		return adscoreErrors.NewVerifyError("signature contains no user agent")
+	}
 
 	if signatureUserAgent == "" {
 		return adscoreErrors.NewVerifyError("signature contains no user agent")
@@ -93,32 +94,35 @@ func (s *Signature5) Verify(ipAddresses []string, userAgent string) error {
 		return adscoreErrors.NewVerifyError("signature user agent mismatch")
 	}
 
-	switch s.Payload["result"].(type) {
+	// Fix #8: Проверяем result на nil перед type assertion
+	resultField := s.Payload["result"]
+	if resultField == nil {
+		return adscoreErrors.NewParseError("missing result in payload")
+	}
+
+	switch v := resultField.(type) {
 	case string:
-		result, err := strconv.ParseInt(s.Payload["result"].(string), 10, 8)
-		s.Result = int(result)
+		result, err := strconv.ParseInt(v, 10, 8)
 		if err != nil {
 			return err
 		}
+		s.Result = int(result)
 	case float64:
-		s.Result = int(s.Payload["result"].(float64))
+		s.Result = int(v)
 	default:
-		return errors.New("invalid result type, expected string or Float64")
+		return errors.New("invalid result type, expected string or float64")
 	}
 
 	return nil
 }
 
 func (s *Signature5) Parse(signature string, cryptKey []byte, format string) error {
-
 	encryptedPayload, payloadDecodeError := formatter.Parse(signature, format)
-
 	if payloadDecodeError != nil {
 		return payloadDecodeError
 	}
 
 	var data, payloadUnpackError = utils.Unpack("Cversion/nlength/Jzone_id", encryptedPayload)
-
 	if payloadUnpackError != nil {
 		return payloadUnpackError
 	}
@@ -140,12 +144,16 @@ func (s *Signature5) Parse(signature string, cryptKey []byte, format string) err
 		return adscoreErrors.NewParseError("truncated signature payload")
 	}
 
+	// Fix #7: Сначала расшифровываем, потом записываем данные
 	result, err := decryptPayload(encryptedPayload, cryptKey)
+	if err != nil {
+		return err
+	}
 
 	s.ZoneId = int64(*data["zone_id"])
 	s.Payload = result
 
-	return err
+	return nil
 }
 
 func GetZoneId(signature string, format string) (int64, error) {

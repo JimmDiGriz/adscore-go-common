@@ -2,6 +2,7 @@ package adscoreStruct
 
 import (
 	"net/url"
+	"strconv"
 )
 
 func decodeRFC3986Struct(payload []byte) (map[string]interface{}, error) {
@@ -14,13 +15,18 @@ func decodeRFC3986Struct(payload []byte) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	for key, value := range queryValues {
-
+		// Fix #9: Парсим числовые значения
 		if len(value) == 1 {
-			result[key] = value[0]
+			val := value[0]
+			// Пробуем распарсить как int
+			if num, err := strconv.Atoi(val); err == nil {
+				result[key] = num
+			} else {
+				result[key] = val
+			}
 		} else {
 			result[key] = value
 		}
-
 	}
 
 	return result, nil
