@@ -4,8 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 
-	adscoreErrors "github.com/Adscore/go-common/adscoreErrors"
-	utils "github.com/Adscore/go-common/utils"
+	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
+	utils "github.com/JimmDiGriz/adscore-go-common/utils"
 )
 
 var OpenSSLAEADMethod = 0x0201

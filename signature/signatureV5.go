@@ -5,11 +5,11 @@ import (
 	"net"
 	"strconv"
 
-	adscoreErrors "github.com/Adscore/go-common/adscoreErrors"
-	adscoreStruct "github.com/Adscore/go-common/adscoreStruct"
-	crypt "github.com/Adscore/go-common/crypt"
-	formatter "github.com/Adscore/go-common/formatter"
-	utils "github.com/Adscore/go-common/utils"
+	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
+	adscoreStruct "github.com/JimmDiGriz/adscore-go-common/adscoreStruct"
+	crypt "github.com/JimmDiGriz/adscore-go-common/crypt"
+	formatter "github.com/JimmDiGriz/adscore-go-common/formatter"
+	utils "github.com/JimmDiGriz/adscore-go-common/utils"
 )
 
 const SUPPORTED_VERSION_V5 = 5

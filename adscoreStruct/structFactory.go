@@ -1,7 +1,7 @@
 package adscoreStruct
 
 import (
-	adscoreErrors "github.com/Adscore/go-common/adscoreErrors"
+	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
 )
 
 func DecodeStructFromPayload(payload []byte) (map[string]interface{}, error) {

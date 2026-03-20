@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"net"
 
-	adscoreErrors "github.com/Adscore/go-common/adscoreErrors"
-	adscoreCrypt "github.com/Adscore/go-common/crypt"
-	formatter "github.com/Adscore/go-common/formatter"
-	judge "github.com/Adscore/go-common/judge"
-	utils "github.com/Adscore/go-common/utils"
+	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
+	adscoreCrypt "github.com/JimmDiGriz/adscore-go-common/crypt"
+	formatter "github.com/JimmDiGriz/adscore-go-common/formatter"
+	judge "github.com/JimmDiGriz/adscore-go-common/judge"
+	utils "github.com/JimmDiGriz/adscore-go-common/utils"
 )
 
 const SUPPORTED_VERSION_V4 = 4
@@ -35,8 +35,8 @@ type FieldTypeDef struct {
 var FIELD_IDS = map[uint8]*FieldTypeDef{
 	0x00: {"requestTime", "ulong"},
 	0x01: {"signatureTime", "ulong"},
-	0x10: {"ipv4", "ulong"}, // Debug field
-	0x40: {"pizdec", "ushort"},                // Reserved for future use
+	0x10: {"ipv4", "ulong"},    // Debug field
+	0x40: {"pizdec", "ushort"}, // Reserved for future use
 	0x80: {"masterSignType", "uchar"},
 	0x81: {"customerSignType", "uchar"},
 	0xc0: {"masterToken", "string"},
