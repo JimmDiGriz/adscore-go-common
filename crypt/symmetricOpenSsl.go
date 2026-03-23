@@ -72,6 +72,10 @@ func DecryptSymmetricOpenSsl(payload []byte, encryptionKey []byte) ([]byte, erro
 }
 
 func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
+	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
+		return nil, adscoreErrors.NewParseError("invalid CBC data length")
+	}
+
 	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		return nil, err
@@ -79,7 +83,21 @@ func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
 
 	mode := cipher.NewCBCDecrypter(block, iv)
 	mode.CryptBlocks(data, data)
-	return data, nil
+
+	// Удаляем PKCS7 padding
+	padding := int(data[len(data)-1])
+	if padding > len(data) || padding == 0 {
+		return nil, adscoreErrors.NewParseError("invalid PKCS7 padding")
+	}
+
+	// Проверяем что все байты padding правильные
+	for i := 0; i < padding; i++ {
+		if data[len(data)-1-i] != byte(padding) {
+			return nil, adscoreErrors.NewParseError("invalid PKCS7 padding")
+		}
+	}
+
+	return data[:len(data)-padding], nil
 }
 
 func gcmDecrypt(data []byte, encryptionKey []byte, iv []byte, tag []byte) ([]byte, error) {

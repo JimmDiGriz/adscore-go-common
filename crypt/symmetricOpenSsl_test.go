@@ -17,11 +17,19 @@ func TestDecryptSymmetricOpenSsl_CBC(t *testing.T) {
 	// Plaintext: "Hello, World!123" (16 байт, ровно один блок)
 	plaintext := []byte("Hello, World!123")
 
+	// Добавляем PKCS7 padding (16 байт = 0x10 0x10 ... 0x10)
+	padding := 16
+	paddedPlaintext := make([]byte, len(plaintext)+padding)
+	copy(paddedPlaintext, plaintext)
+	for i := 0; i < padding; i++ {
+		paddedPlaintext[len(plaintext)+i] = byte(padding)
+	}
+
 	// Шифруем для получения ciphertext
 	block, _ := aes.NewCipher(key)
 	mode := cipher.NewCBCEncrypter(block, iv)
-	ciphertext := make([]byte, len(plaintext))
-	mode.CryptBlocks(ciphertext, plaintext)
+	ciphertext := make([]byte, len(paddedPlaintext))
+	mode.CryptBlocks(ciphertext, paddedPlaintext)
 
 	// Формируем payload: method(2) + iv(16) + data
 	payload := make([]byte, 0, 2+16+len(ciphertext))
@@ -161,10 +169,18 @@ func Test_cbcDecrypt(t *testing.T) {
 	iv := []byte("0123456789abcdef")
 	plaintext := []byte("Hello, World!123")
 
+	// Добавляем PKCS7 padding (16 байт = 0x10 0x10 ... 0x10)
+	padding := 16
+	paddedPlaintext := make([]byte, len(plaintext)+padding)
+	copy(paddedPlaintext, plaintext)
+	for i := 0; i < padding; i++ {
+		paddedPlaintext[len(plaintext)+i] = byte(padding)
+	}
+
 	block, _ := aes.NewCipher(key)
 	mode := cipher.NewCBCEncrypter(block, iv)
-	ciphertext := make([]byte, len(plaintext))
-	mode.CryptBlocks(ciphertext, plaintext)
+	ciphertext := make([]byte, len(paddedPlaintext))
+	mode.CryptBlocks(ciphertext, paddedPlaintext)
 
 	result, err := cbcDecrypt(ciphertext, key, iv)
 	if err != nil {
