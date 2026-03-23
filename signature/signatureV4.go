@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 
 	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
 	adscoreCrypt "github.com/JimmDiGriz/adscore-go-common/crypt"
@@ -123,17 +124,23 @@ func (s *Signature4) parse(signature string, format string) error {
 			return adscoreErrors.NewParseError("premature end of signature")
 		}
 
-		var fieldTypeDef = &FieldTypeDef{}
-
 		var fieldId = uint8(*fieldIdData["fieldId"])
 
-		if FIELD_IDS[fieldId] == nil {
-			var t = (*FIELD_IDS[fieldId&0xc0]).Type
-			/* Guess field size, but leave unrecognized */
-			fieldTypeDef.Type = t
-			fieldTypeDef.Name = fmt.Sprintf("%s%02x", t, i)
-		} else {
+		// Fix #6: Безопасная обработка неизвестных fieldId
+		var fieldTypeDef *FieldTypeDef
+		if FIELD_IDS[fieldId] != nil {
 			fieldTypeDef = FIELD_IDS[fieldId]
+		} else {
+			highBits := fieldId & 0xc0
+			if FIELD_IDS[highBits] == nil {
+				return adscoreErrors.NewParseError(fmt.Sprintf("unknown field ID 0x%02x", fieldId))
+			}
+			t := FIELD_IDS[highBits].Type
+			/* Guess field size, but leave unrecognized */
+			fieldTypeDef = &FieldTypeDef{
+				Type: t,
+				Name: fmt.Sprintf("%s%02x", t, i),
+			}
 		}
 
 		if fieldTypeDef.Name == "" || fieldTypeDef.Type == "" {
@@ -159,40 +166,55 @@ func (s *Signature4) verify(ipAddresses []string, userAgent string, cryptKey []b
 		return adscoreErrors.NewParseError("unsupported signRole")
 	}
 
-	signType := s.Payload[signRole+"SignType"].(*int)
+	// Fix #2: Проверяем наличие полей перед type assertion
+	signTypeVal, ok := s.Payload[signRole+"SignType"].(*int)
+	if !ok {
+		return adscoreErrors.NewParseError("missing " + signRole + "SignType")
+	}
 
 	for _, ipAddress := range ipAddresses {
-
 		providedIpAddress := net.ParseIP(ipAddress)
-
 		v := 4
 
 		var token []byte
-
 		if providedIpAddress.To4() != nil {
-			token = s.Payload[signRole+"Token"].([]byte)
+			tokenVal, ok := s.Payload[signRole+"Token"].([]byte)
+			if !ok {
+				return adscoreErrors.NewParseError("missing " + signRole + "Token")
+			}
+			token = tokenVal
 		} else if providedIpAddress.To16() != nil {
 			v = 6
-			token = s.Payload[signRole+"Token6"].([]byte)
-
-			if token == nil {
+			tokenVal, ok := s.Payload[signRole+"Token6"].([]byte)
+			if !ok || tokenVal == nil {
 				continue
 			}
+			token = tokenVal
+		}
+
+		// Проверяем наличие requestTime и signatureTime
+		requestTimeVal, ok := s.Payload["requestTime"].(*int)
+		if !ok {
+			return adscoreErrors.NewParseError("missing requestTime")
+		}
+		signatureTimeVal, ok := s.Payload["signatureTime"].(*int)
+		if !ok {
+			return adscoreErrors.NewParseError("missing signatureTime")
 		}
 
 		/* Check all possible results */
 		for result := range judge.Judge {
 			meta := judge.RESULTS[result]
 
-			signatureBase := getHashBase(result, s.Payload["requestTime"].(*int), s.Payload["signatureTime"].(*int), ipAddress, userAgent)
+			signatureBase := getHashBase(result, requestTimeVal, signatureTimeVal, ipAddress, userAgent)
 
-			switch *signType {
+			switch *signTypeVal {
 			case HASH_SHA256:
 				if verifyHashedSignature(signatureBase, cryptKey, token) {
 					s.VerificationData = SignaturePayload{}
 					s.VerificationData["verdict"] = meta.Verdict
 					s.VerificationData["result"] = result
-					s.VerificationData["ipv"+string(v)+"ip"] = ipAddress
+					s.VerificationData["ipv"+strconv.Itoa(v)+"ip"] = ipAddress
 					s.VerificationData[""] = verifyEmbeddedIpv6(s.Payload, result, cryptKey, userAgent, signRole)
 					s.Result = result
 
@@ -200,11 +222,12 @@ func (s *Signature4) verify(ipAddresses []string, userAgent string, cryptKey []b
 				}
 
 			case SIGN_SHA256:
-				if verifySignedSignature(signatureBase, cryptKey, token) {
+				valid, err := verifySignedSignature(signatureBase, cryptKey, token)
+				if err == nil && valid {
 					s.VerificationData = SignaturePayload{}
 					s.VerificationData["verdict"] = meta.Verdict
 					s.VerificationData["result"] = result
-					s.VerificationData["ipv"+string(v)+"ip"] = ipAddress
+					s.VerificationData["ipv"+strconv.Itoa(v)+"ip"] = ipAddress
 					s.VerificationData[""] = verifyEmbeddedIpv6(s.Payload, result, cryptKey, userAgent, signRole)
 					s.Result = result
 
@@ -233,7 +256,7 @@ func createHmac(input string, cryptKey []byte) []byte {
 	return hmacHash.Sum(nil)
 }
 
-func verifySignedSignature(signatureBase string, cryptKey []byte, token []byte) bool {
+func verifySignedSignature(signatureBase string, cryptKey []byte, token []byte) (bool, error) {
 	return adscoreCrypt.VerifyAsymmetric([]byte(signatureBase), token, cryptKey)
 }
 
@@ -304,31 +327,58 @@ func verifyEmbeddedIpv6(data map[string]interface{}, result int, key []byte, use
 		return "" // Unable to verify signature integrity
 	}
 
-	if _, ok := data["ipV6"]; !ok || len(data["ipV6"].(string)) == 0 {
+	// Fix #3: Безопасные type assertion
+	ipV6Val, ok := data["ipV6"].(string)
+	if !ok || ipV6Val == "" {
 		return "" // No IPv6 supplied
 	}
 
-	if _, ok := data[signRole+"TokenV6"]; !ok || len(data[signRole+"TokenV6"].(string)) == 0 {
+	tokenV6Val, ok := data[signRole+"TokenV6"].(string)
+	if !ok || tokenV6Val == "" {
 		return "" // No IPv6 tokens supplied
 	}
 
-	checksum := createHmac(data[signRole+"Token"].(string)+data[signRole+"TokenV6"].(string), key)
-	if !bytes.Equal(checksum, data[signRole+"Checksum"].([]byte)) {
+	tokenVal, ok := data[signRole+"Token"].(string)
+	if !ok {
+		return "" // No token supplied
+	}
+
+	checksumVal, ok := data[signRole+"Checksum"].([]byte)
+	if !ok {
+		return "" // No checksum supplied
+	}
+
+	checksum := createHmac(tokenVal+tokenV6Val, key)
+	if !bytes.Equal(checksum, checksumVal) {
 		return "" // Integrity not preserved
 	}
 
-	ipAddress := net.ParseIP(data["ipV6"].(string))
+	ipAddress := net.ParseIP(ipV6Val)
 	if ipAddress == nil || ipAddress.To16() == nil {
 		return "" // Not valid IPv6 struct
 	}
 
-	signType := data[signRole+"SignType"]
-	signatureBase := getHashBase(result, data["requestTime"].(*int), data["signatureTime"].(*int), ipAddress.String(), userAgent)
+	signTypeVal, ok := data[signRole+"SignType"].(string)
+	if !ok {
+		return "" // No signType supplied
+	}
 
-	switch signType {
+	requestTimeVal, ok := data["requestTime"].(*int)
+	if !ok {
+		return "" // No requestTime supplied
+	}
+	signatureTimeVal, ok := data["signatureTime"].(*int)
+	if !ok {
+		return "" // No signatureTime supplied
+	}
+
+	signatureBase := getHashBase(result, requestTimeVal, signatureTimeVal, ipAddress.String(), userAgent)
+
+	switch signTypeVal {
 	case "sha256":
 		xToken := createHmac(signatureBase, key)
-		if bytes.Equal(xToken, data[signRole+"TokenV6"].([]byte)) {
+		tokenV6Bytes, ok := data[signRole+"TokenV6"].([]byte)
+		if ok && bytes.Equal(xToken, tokenV6Bytes) {
 			return ipAddress.String()
 		}
 		// Customer verification currently unsupported

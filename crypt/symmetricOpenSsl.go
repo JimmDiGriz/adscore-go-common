@@ -3,6 +3,7 @@ package crypt
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 
 	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
 	utils "github.com/JimmDiGriz/adscore-go-common/utils"
@@ -64,14 +65,24 @@ func DecryptSymmetricOpenSsl(payload []byte, encryptionKey []byte) ([]byte, erro
 		return nil, err
 	}
 
+	// Обработка неизвестных методов шифрования
+	if method != OpenSSLMethod && method != OpenSSLAEADMethod {
+		return nil, adscoreErrors.NewParseError(
+			fmt.Sprintf("unsupported encryption method: 0x%04x (supported: 0x0200=CBC, 0x0201=GCM)", method),
+		)
+	}
+
 	if method == OpenSSLAEADMethod {
 		return gcmDecrypt(data, encryptionKey, iv, tag)
-	} else {
-		return cbcDecrypt(data, encryptionKey, iv)
 	}
+	return cbcDecrypt(data, encryptionKey, iv)
 }
 
 func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
+	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
+		return nil, adscoreErrors.NewParseError("invalid CBC data length")
+	}
+
 	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		return nil, err
@@ -79,12 +90,26 @@ func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
 
 	mode := cipher.NewCBCDecrypter(block, iv)
 	mode.CryptBlocks(data, data)
-	return data, nil
+
+	// Удаляем PKCS7 padding
+	padding := int(data[len(data)-1])
+	if padding > len(data) || padding == 0 {
+		return nil, adscoreErrors.NewParseError("invalid PKCS7 padding")
+	}
+
+	// Проверяем что все байты padding правильные
+	for i := 0; i < padding; i++ {
+		if data[len(data)-1-i] != byte(padding) {
+			return nil, adscoreErrors.NewParseError("invalid PKCS7 padding")
+		}
+	}
+
+	return data[:len(data)-padding], nil
 }
 
 func gcmDecrypt(data []byte, encryptionKey []byte, iv []byte, tag []byte) ([]byte, error) {
-
-	cipherText := append(data, tag...)
+	// Клонируем data перед append, чтобы не мутировать входной слайс
+	cipherText := append(append([]byte{}, data...), tag...)
 
 	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
