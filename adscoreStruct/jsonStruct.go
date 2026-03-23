@@ -1,7 +1,6 @@
 package adscoreStruct
 
 import (
-	"bytes"
 	"encoding/json"
 )
 
@@ -13,17 +12,14 @@ func decodeJson(payload []byte) (map[string]interface{}, error) {
 	return data, err
 }
 
-// Fix #10: Оптимизированная версия trimPayload с bytes.Buffer
+// Fix #10: Оптимизированная версия trimPayload
+// Выделяем память сразу, чтобы избежать реаллокаций
 func trimPayload(payload []byte) []byte {
-	var builder bytes.Buffer
-	builder.Grow(len(payload))
-
+	result := make([]byte, 0, len(payload))
 	for _, v := range payload {
-		// trim end of transmission ASCII char
 		if v != 0x4 {
-			builder.WriteByte(v)
+			result = append(result, v)
 		}
 	}
-
-	return builder.Bytes()
+	return result
 }

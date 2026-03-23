@@ -1,6 +1,7 @@
 package adscoreStruct
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -150,5 +151,99 @@ func Test_trimPayload_Empty(t *testing.T) {
 
 	if len(result) != 0 {
 		t.Errorf("trimPayload() expected empty result, got %v", string(result))
+	}
+}
+
+// Test_trimPayload_Compatibility проверяет что оптимизированная версия
+// возвращает тот же результат что и старая (наивная) реализация
+func Test_trimPayload_Compatibility(t *testing.T) {
+	// Старая (наивная) реализация для сравнения
+	oldTrimPayload := func(payload []byte) []byte {
+		result := []byte{}
+		for _, v := range payload {
+			if v != 0x4 {
+				result = append(result, v)
+			}
+		}
+		return result
+	}
+
+	tests := []struct {
+		name  string
+		input []byte
+	}{
+		{"empty", []byte{}},
+		{"no_eot", []byte("hello world")},
+		{"single_eot_end", []byte("hello\x04")},
+		{"multiple_eot_end", []byte("hello\x04\x04\x04")},
+		{"eot_only", []byte{0x04, 0x04, 0x04}},
+		{"eot_middle", []byte{'h', 'e', 0x04, 'l', 'l', 'o'}},
+		{"eot_everywhere", []byte{0x04, 'a', 0x04, 'b', 0x04, 'c', 0x04}},
+		{"large_payload", func() []byte {
+			data := make([]byte, 10000)
+			for i := range data {
+				if i%10 == 0 {
+					data[i] = 0x04
+				} else {
+					data[i] = byte('a' + (i % 26))
+				}
+			}
+			return data
+		}()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldResult := oldTrimPayload(tt.input)
+			newResult := trimPayload(tt.input)
+
+			if !bytes.Equal(oldResult, newResult) {
+				t.Errorf("trimPayload() mismatch!\nold: %v\nnew: %v", oldResult, newResult)
+			}
+		})
+	}
+}
+
+// Benchmark_trimPayload_Old бенчмарк старой (наивной) реализации
+func Benchmark_trimPayload_Old(b *testing.B) {
+	oldTrimPayload := func(payload []byte) []byte {
+		result := []byte{}
+		for _, v := range payload {
+			if v != 0x4 {
+				result = append(result, v)
+			}
+		}
+		return result
+	}
+
+	input := make([]byte, 1000)
+	for i := range input {
+		if i%10 == 0 {
+			input[i] = 0x04
+		} else {
+			input[i] = byte('a' + (i % 26))
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = oldTrimPayload(input)
+	}
+}
+
+// Benchmark_trimPayload_New бенчмарк новой (оптимизированной) реализации
+func Benchmark_trimPayload_New(b *testing.B) {
+	input := make([]byte, 1000)
+	for i := range input {
+		if i%10 == 0 {
+			input[i] = 0x04
+		} else {
+			input[i] = byte('a' + (i % 26))
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = trimPayload(input)
 	}
 }

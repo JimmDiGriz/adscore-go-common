@@ -3,6 +3,7 @@ package crypt
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 
 	adscoreErrors "github.com/JimmDiGriz/adscore-go-common/adscoreErrors"
 	utils "github.com/JimmDiGriz/adscore-go-common/utils"
@@ -64,11 +65,17 @@ func DecryptSymmetricOpenSsl(payload []byte, encryptionKey []byte) ([]byte, erro
 		return nil, err
 	}
 
+	// Обработка неизвестных методов шифрования
+	if method != OpenSSLMethod && method != OpenSSLAEADMethod {
+		return nil, adscoreErrors.NewParseError(
+			fmt.Sprintf("unsupported encryption method: 0x%04x (supported: 0x0200=CBC, 0x0201=GCM)", method),
+		)
+	}
+
 	if method == OpenSSLAEADMethod {
 		return gcmDecrypt(data, encryptionKey, iv, tag)
-	} else {
-		return cbcDecrypt(data, encryptionKey, iv)
 	}
+	return cbcDecrypt(data, encryptionKey, iv)
 }
 
 func cbcDecrypt(data []byte, encryptionKey []byte, iv []byte) ([]byte, error) {
