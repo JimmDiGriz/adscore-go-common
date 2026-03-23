@@ -21,7 +21,7 @@ func Test_decodeRFC3986Struct_Simple(t *testing.T) {
 }
 
 func Test_decodeRFC3986Struct_NumericValues(t *testing.T) {
-	// Fix #9: Теперь RFC3986 парсер возвращает числа как int
+	// Fix #9: Парсим числа в float64 для совместимости с JSON парсером
 	payload := []byte(`result=9&count=123`)
 
 	result, err := decodeRFC3986Struct(payload)
@@ -29,12 +29,12 @@ func Test_decodeRFC3986Struct_NumericValues(t *testing.T) {
 		t.Fatalf("decodeRFC3986Struct() error = %v", err)
 	}
 
-	// Теперь ожидаем int
-	if result["result"] != 9 {
-		t.Errorf("result = %v, want 9", result["result"])
+	// Ожидаем float64 (как JSON парсер)
+	if result["result"] != float64(9) {
+		t.Errorf("result = %v (%T), want 9 (float64)", result["result"], result["result"])
 	}
-	if result["count"] != 123 {
-		t.Errorf("count = %v, want 123", result["count"])
+	if result["count"] != float64(123) {
+		t.Errorf("count = %v (%T), want 123 (float64)", result["count"], result["count"])
 	}
 }
 
@@ -132,18 +132,18 @@ func Test_decodeRFC3986Struct_MultiplePairs(t *testing.T) {
 		t.Fatalf("decodeRFC3986Struct() error = %v", err)
 	}
 
-	// Fix #9: Числа парсятся как int
-	if result["a"] != 1 {
-		t.Errorf("a = %v, want 1", result["a"])
+	// Ожидаем float64 (как JSON парсер)
+	if result["a"] != float64(1) {
+		t.Errorf("a = %v (%T), want 1 (float64)", result["a"], result["a"])
 	}
-	if result["b"] != 2 {
-		t.Errorf("b = %v, want 2", result["b"])
+	if result["b"] != float64(2) {
+		t.Errorf("b = %v (%T), want 2 (float64)", result["b"], result["b"])
 	}
-	if result["c"] != 3 {
-		t.Errorf("c = %v, want 3", result["c"])
+	if result["c"] != float64(3) {
+		t.Errorf("c = %v (%T), want 3 (float64)", result["c"], result["c"])
 	}
-	if result["d"] != 4 {
-		t.Errorf("d = %v, want 4", result["d"])
+	if result["d"] != float64(4) {
+		t.Errorf("d = %v (%T), want 4 (float64)", result["d"], result["d"])
 	}
 }
 

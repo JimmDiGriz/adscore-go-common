@@ -1,8 +1,8 @@
 package adscoreStruct
 
 import (
-	"net/url"
 	"strconv"
+	"net/url"
 )
 
 func decodeRFC3986Struct(payload []byte) (map[string]interface{}, error) {
@@ -15,12 +15,12 @@ func decodeRFC3986Struct(payload []byte) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	for key, value := range queryValues {
-		// Fix #9: Парсим числовые значения
+		// Парсим числовые значения в float64 для совместимости с JSON парсером
 		if len(value) == 1 {
 			val := value[0]
-			// Пробуем распарсить как int
+			// Пробуем распарсить как int, конвертируем в float64
 			if num, err := strconv.Atoi(val); err == nil {
-				result[key] = num
+				result[key] = float64(num)
 			} else {
 				result[key] = val
 			}

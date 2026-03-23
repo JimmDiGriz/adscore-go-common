@@ -1,6 +1,7 @@
 package adscoreStruct
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -30,9 +31,9 @@ func TestDecodeStructFromPayload_RFC3986(t *testing.T) {
 		t.Fatalf("DecodeStructFromPayload() error = %v", err)
 	}
 
-	// Fix #9: result теперь int
-	if result["result"] != 9 {
-		t.Errorf("result = %v, want 9", result["result"])
+	// Fix #9: result теперь float64 (как JSON парсер)
+	if result["result"] != float64(9) {
+		t.Errorf("result = %v (%T), want 9 (float64)", result["result"], result["result"])
 	}
 	if result["ipv4.ip"] != "1.2.3.4" {
 		t.Errorf("ipv4.ip = %v, want 1.2.3.4", result["ipv4.ip"])
@@ -131,9 +132,9 @@ func TestDecodeStruct_RFC3986_Uppercase(t *testing.T) {
 		t.Fatalf("DecodeStruct() error = %v", err)
 	}
 
-	// Fix #9: test теперь int
-	if result["test"] != 123 {
-		t.Errorf("test = %v, want 123", result["test"])
+	// Fix #9: test теперь float64 (как JSON парсер)
+	if result["test"] != float64(123) {
+		t.Errorf("test = %v (%T), want 123 (float64)", result["test"], result["test"])
 	}
 }
 
@@ -162,5 +163,56 @@ func TestDecodeStruct_EmptyData(t *testing.T) {
 	_, err := DecodeStruct("json", []byte{})
 	if err == nil {
 		t.Error("DecodeStruct() expected error for empty JSON data")
+	}
+}
+
+// TestDecodeStruct_JSON_RFC3986_Compatibility проверяет что JSON и RFC3986
+// парсеры возвращают одинаковые типы для числовых значений (float64)
+func TestDecodeStruct_JSON_RFC3986_Compatibility(t *testing.T) {
+	jsonData := []byte(`{"result":9,"count":123,"ip":"1.2.3.4"}`)
+	rfc3986Data := []byte(`result=9&count=123&ip=1.2.3.4`)
+
+	jsonResult, err := DecodeStruct("json", jsonData)
+	if err != nil {
+		t.Fatalf("DecodeStruct(json) error = %v", err)
+	}
+
+	rfc3986Result, err := DecodeStruct("rfc3986", rfc3986Data)
+	if err != nil {
+		t.Fatalf("DecodeStruct(rfc3986) error = %v", err)
+	}
+
+	// Проверяем что типы совпадают
+	for key, jsonVal := range jsonResult {
+		rfcVal, ok := rfc3986Result[key]
+		if !ok {
+			t.Errorf("RFC3986 missing key %s", key)
+			continue
+		}
+
+		// Сравниваем типы
+		jsonType := fmt.Sprintf("%T", jsonVal)
+		rfcType := fmt.Sprintf("%T", rfcVal)
+
+		if jsonType != rfcType {
+			t.Errorf("Type mismatch for key %s: JSON=%T (%v), RFC3986=%T (%v)",
+				key, jsonVal, jsonVal, rfcVal, rfcVal)
+		}
+
+		// Для чисел сравниваем значения
+		switch jv := jsonVal.(type) {
+		case float64:
+			if rv, ok := rfcVal.(float64); ok {
+				if jv != rv {
+					t.Errorf("Value mismatch for key %s: JSON=%v, RFC3986=%v", key, jv, rv)
+				}
+			}
+		case string:
+			if rv, ok := rfcVal.(string); ok {
+				if jv != rv {
+					t.Errorf("Value mismatch for key %s: JSON=%v, RFC3986=%v", key, jv, rv)
+				}
+			}
+		}
 	}
 }
